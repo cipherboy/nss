@@ -34,6 +34,7 @@
         'ecl_unittest.cc',
         'ghash_unittest.cc',
         'rsa_unittest.cc',
+        'cmac_unittests.cc',
         '<(DEPTH)/gtests/common/gtests.cc'
       ],
       'dependencies': [
