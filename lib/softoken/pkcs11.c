@@ -324,6 +324,8 @@ static const struct mechanismList mechanisms[] = {
     { CKM_AES_CBC, { 16, 32, CKF_EN_DE_WR_UN }, PR_TRUE },
     { CKM_AES_MAC, { 16, 32, CKF_SN_VR }, PR_TRUE },
     { CKM_AES_MAC_GENERAL, { 16, 32, CKF_SN_VR }, PR_TRUE },
+    { CKM_AES_CMAC, { 16, 32, CKF_SN_VR }, PR_TRUE },
+    { CKM_AES_CMAC_GENERAL, { 16, 32, CKF_SN_VR }, PR_TRUE },
     { CKM_AES_CBC_PAD, { 16, 32, CKF_EN_DE_WR_UN }, PR_TRUE },
     { CKM_AES_CTS, { 16, 32, CKF_EN_DE }, PR_TRUE },
     { CKM_AES_CTR, { 16, 32, CKF_EN_DE }, PR_TRUE },
@@ -3900,10 +3902,7 @@ NSC_SetPIN(CK_SESSION_HANDLE hSession, CK_CHAR_PTR pOldPin,
         crv = CKR_PIN_LEN_RANGE;
         goto loser;
     }
-    /* check the length of new pin, unless both old and new passwords
-     * are empty */
-    if ((ulNewLen != 0 || ulOldLen != 0) &&
-        ulNewLen < (CK_ULONG)slot->minimumPinLen) {
+    if (ulNewLen < (CK_ULONG)slot->minimumPinLen) {
         crv = CKR_PIN_LEN_RANGE;
         goto loser;
     }
