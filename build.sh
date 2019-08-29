@@ -18,6 +18,7 @@ argsfile="$dist_dir/build_args"
 source "$cwd/coreconf/nspr.sh"
 source "$cwd/coreconf/sanitizers.sh"
 GYP=${GYP:-gyp}
+PYTHON=${PYTHON:-python}
 
 # Usage info
 show_help()
@@ -49,6 +50,17 @@ if [ -n "$CCC" ] && [ -z "$CXX" ]; then
     export CXX="$CCC"
 fi
 
+if ! command -v "$PYTHON" >/dev/null 2>&1; then
+    if command -v python3 >/dev/null 2>&1; then
+        PYTHON="python3"
+    elif command -v python2 >/dev/null 2>&1; then
+        PYTHON="python2"
+    else
+        echo "Unable to detect a python interpreter. Please pass one in \$PYTHON." 1>&2
+        exit 1
+    fi
+fi
+
 opt_build=0
 build_64=0
 clean=0
@@ -66,7 +78,7 @@ gyp_params=(--depth="$cwd" --generator-output=".")
 ninja_params=()
 
 # Assume that the target architecture is the same as the host by default.
-host_arch=$(python "$cwd/coreconf/detect_host_arch.py")
+host_arch=$("$PYTHON" "$cwd/coreconf/detect_host_arch.py")
 target_arch=$host_arch
 
 # Assume that MSVC is wanted if this is running on windows.
