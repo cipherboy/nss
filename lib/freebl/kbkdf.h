@@ -63,24 +63,28 @@ KBKDFContext *KBKDF_Create(KBKDFPrf prf, KBKDFMode mode,
  *  - key_len, the length of key, in bytes,
  *  - label (Label), the purpose of the derived material,
  *  - label_len, the length of label, in bytes,
+ *  - separator_len, the length of the separator indicator (0x00) , in bytes,
  *  - context (Context), the context of the derived material (e.g., entities),
  *  - context_len, the length of context, in bytes,
  *  - iv (IV), the initialization vector for KBKDF_FEEDBACK, NULL otherwise,
- *  - iv_len, the length of iv (zero if not using KBKDF_FEEDBACK),
+ *  - iv_len, the length of iv, in bytes,
  *  - result (K0), an allocated buffer to place the resulting key material in,
  *  - result_len (L), the length of result, in bytes.
+ *  - result_bit_len (|L|_2), the length of L, in bits.
  */
 SECStatus KBKDF_Derive(KBKDFContext *ctx,
                        const unsigned char *key,
                        unsigned int key_len,
                        const unsigned char *label,
                        unsigned int label_len,
+                       unsigned int separator_len,
                        const unsigned char *context,
                        unsigned int context_len,
                        const unsigned char *iv,
                        unsigned int iv_len,
                        unsigned char *result,
-                       unsigned int result_len);
+                       unsigned int result_len,
+                       unsigned int result_bit_len);
 
 /* Destroy a KBKDF Context, optionally freeing it. */
 void KBKDF_Destroy(KBKDFContext *ctx, PRBool free_it);
