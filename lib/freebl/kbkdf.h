@@ -20,6 +20,7 @@ typedef enum {
     KBKDF_HMAC_SHA2_512 = 6
 } KBKDFPrf;
 
+/* Enum for identifying the KDF chaining mode we're using. */
 typedef enum {
     KBKDF_COUNTER = 0,
     KBKDF_FEEDBACK = 1,
@@ -27,22 +28,34 @@ typedef enum {
 } KBKDFMode;
 
 /* Initialize an existing KBKDFContext struct. This takes four parameters:
+ *
  *  - prf, the underlying pseudo-random function to use,
  *  - mode, the chaining mode to use,
  *  - output_bitlen, the number of bits in the output size,
  *  - counter_bitlen, the number of bits to use for the internal counter.
+ *
+ *  We place the restriction here counter_bitlen is a multiple of 8 and at is
+ *  most 64. Thus it can always be represented as a 64-bit integer value and
+ *  when serialized to the PRF input, always terminates at a byte boundary.
+ *  This restriction comes from our underlying PRF implementations.
+ *
+ *  Note that output_bitlen must also be a multiple of 8 and is bounded above
+ *  by the number of bits in the PRF output. A value of zero indicates that
+ *  we should use the actual output size of the PRF.
  */
 SECStatus KBKDF_Init(KBKDFContext *ctx, KBKDF_PRF prf, KBKDFMode mode,
                      unsigned int output_bitlen, unsigned int counter_bitlen);
 
 /* Create and initialize a new KBKDF context with the specified parameters.
- * See KBKDF_Init for more information about the parameters. */
+ * The caller is responsible for freeing the result via KBKDF_Destroy. See
+ * KBKDF_Init for more information about the arguments. */
 KBKDFContext *KBKDF_Create(KBKDF_PRF prf, KBKDFMode mode,
                            unsigned int output_bitlen,
                            unsigned int counter_bitlen);
 
 /* Derive a key (placing the output K0 in result) using the specified
  * parameters:
+ *
  *  - key (K1), the key to derive with,
  *  - key_len, the length of key, in bytes,
  *  - label (Label), the purpose of the derived material,
