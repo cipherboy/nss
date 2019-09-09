@@ -43,13 +43,13 @@ typedef enum {
  *  by the number of bits in the PRF output. A value of zero indicates that
  *  we should use the actual output size of the PRF.
  */
-SECStatus KBKDF_Init(KBKDFContext *ctx, KBKDF_PRF prf, KBKDFMode mode,
+SECStatus KBKDF_Init(KBKDFContext *ctx, KBKDFPrf prf, KBKDFMode mode,
                      unsigned int output_bitlen, unsigned int counter_bitlen);
 
 /* Create and initialize a new KBKDF context with the specified parameters.
  * The caller is responsible for freeing the result via KBKDF_Destroy. See
  * KBKDF_Init for more information about the arguments. */
-KBKDFContext *KBKDF_Create(KBKDF_PRF prf, KBKDFMode mode,
+KBKDFContext *KBKDF_Create(KBKDFPrf prf, KBKDFMode mode,
                            unsigned int output_bitlen,
                            unsigned int counter_bitlen);
 
@@ -76,7 +76,7 @@ SECStatus KBKDF_Derive(KBKDFContext *ctx, const unsigned char *key,
                        const unsigned char *iv,
                        unsigned int iv_len,
                        const unsigned char *result,
-                       unsigned int result);
+                       unsigned int result_len);
 
 /* Destroy a KBKDF Context, optionally freeing it. */
 void KBKDF_Destroy(KBKDFContext *ctx, PRBool free_it);
