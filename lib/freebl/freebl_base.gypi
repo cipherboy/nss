@@ -41,6 +41,7 @@
     'gcm.c',
     'hmacct.c',
     'jpake.c',
+    'kbkdf.c',
     'ldvector.c',
     'md2.c',
     'md5.c',
