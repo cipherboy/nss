@@ -5,6 +5,9 @@
 #ifndef _KBKDF_H_
 #define _KBKDF_H_
 
+/* KBKDF is an implementation of the NIST 800-108 publication, "Recomendation
+ * for Key Derivation using Pseudorandom Functions" (Revised). */
+
 typedef struct KBKDFContextStr KBKDFContext;
 
 SEC_BEGIN_PROTOS
@@ -67,7 +70,8 @@ KBKDFContext *KBKDF_Create(KBKDFPrf prf, KBKDFMode mode,
  *  - result (K0), an allocated buffer to place the resulting key material in,
  *  - result_len (L), the length of result, in bytes.
  */
-SECStatus KBKDF_Derive(KBKDFContext *ctx, const unsigned char *key,
+SECStatus KBKDF_Derive(KBKDFContext *ctx,
+                       const unsigned char *key,
                        unsigned int key_len,
                        const unsigned char *label,
                        unsigned int label_len,
@@ -75,7 +79,7 @@ SECStatus KBKDF_Derive(KBKDFContext *ctx, const unsigned char *key,
                        unsigned int context_len,
                        const unsigned char *iv,
                        unsigned int iv_len,
-                       const unsigned char *result,
+                       unsigned char *result,
                        unsigned int result_len);
 
 /* Destroy a KBKDF Context, optionally freeing it. */
