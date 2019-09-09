@@ -9,10 +9,22 @@
 #include "cmac.h"
 #include "secerr.h"
 
+/* Internal type: pointers to various contexts. These get created and
+ * destroyed as part of KBKDF_Derive. */
 typedef union {
     CMACContext *cmac;
-     HMACContext *hmac;
+    HMACContext *hmac;
 } kbkdf_PRFType;
+
+/*
+ * Design notes: KBKDF implements the NIST 800-108 publication. We take the
+ * view that an application will likely have only a few KDF types (where the
+ * type is specified by the PRF, the chaining mode, and output/counter
+ * lengths), but have potentially many invocations of it. In particular, we
+ * let the application delay specifying the key until they call
+ * KBKDF_Derive(...). This lets them have a single instance of a KBKDFContext
+ * and reuse it throughout all call sites.
+ */
 
 struct KBKDFContextStr {
     /* Pseudo-random function we're using for this KDF. */
@@ -52,25 +64,27 @@ SECStatus KBKDF_Init(KBKDFContext *ctx, KBKDFPrf prf, KBKDFMode mode,
     ctx->prfType = prf;
     ctx->chainingType = mode;
 
-    /* Handle detection of output_bitlen based on underlying PRF. */
+    /* Handle detection of output_bitlen based on underlying PRF. This lets
+     * the caller ignore the details about the size of their PRF and use the
+     * entire output. */
     if (output_bitlen == 0) {
         switch (prf) {
             case KBKDF_CMAC_AES_128:
             case KBKDF_CMAC_AES_192:
             case KBKDF_CMAC_AES_256:
-                output_bitlen = AES_BLOCK_SIZE;
+                output_bitlen = AES_BLOCK_SIZE * 8;
                 break;
             case KBKDF_HMAC_SHA1:
-                output_bitlen = SHA1_LENGTH;
+                output_bitlen = SHA1_LENGTH * 8;
                 break;
             case KBKDF_HMAC_SHA2_256:
-                output_bitlen = SHA256_LENGTH;
+                output_bitlen = SHA256_LENGTH * 8;
                 break;
             case KBKDF_HMAC_SHA2_384:
-                output_bitlen = SHA384_LENGTH;
+                output_bitlen = SHA384_LENGTH * 8;
                 break;
             case KBKDF_HMAC_SHA2_512:
-                output_bitlen = SHA512_LENGTH;
+                output_bitlen = SHA512_LENGTH * 8;
                 break;
             default:
                 /* We expected a known constant. If someone hits this assert,
@@ -91,7 +105,14 @@ SECStatus KBKDF_Init(KBKDFContext *ctx, KBKDFPrf prf, KBKDFMode mode,
     ctx->output_len = output_bitlen / 8;
 
     /* Validate assumptions we gave in kbkdf.h. */
-    if (counter_bitlen == 0 || counter_bitlen > 64 || (counter_bitlen % 8) != 0) {
+    if (counter_bitlen > 64 || (counter_bitlen % 8) != 0) {
+        PORT_SetError(SEC_ERROR_INVALID_ARGS);
+        return SECFailure;
+    }
+
+    /* counter_bitlen cannot be zero if we're in counter mode: we need at
+     * least one bit to count with! */
+    if (ctx->prfType == KBKDF_COUNTER && coutner_bitlen == 0) {
         PORT_SetError(SEC_ERROR_INVALID_ARGS);
         return SECFailure;
     }
@@ -113,6 +134,36 @@ KBKDFContext *KBKDF_Create(KBKDFPrf prf, KBKDFMode mode,
     return result;
 }
 
+SECStatus kbkdf_ValidateNumIters(KBKDFContext *ctx, unsigned int num_iters) {
+    if (ctx->chainingType == KBKDF_COUNTER ||
+            (ctx->chainingType == KBKDF_FEEDBACK && ctx->counter_len > 0)) {
+        /* We validate that the size of num_iters is fine for our counter.
+         * Interestingly, NIST 800-108 doesn't specify whether this check is
+         * necessary for the Feedback mode with optional counter; since they
+         * don't explicitly specify that the counter can wrap, we take the
+         * view that its invalid to request more iterations than what the
+         * counter provides. */
+        if (num_iters >= (1 << (8 * ctx->counter_len))) {
+            PORT_SetError(SEC_ERROR_INVALID_ARGS);
+            return SECFailure;
+        }
+
+        /* Don't return as we want the non-zero check. */
+    }
+
+    /* Technically we're supposed to validate that num_iters <= (2^32) - 1.
+     * Since we're using an unsigned int for both result_len and
+     * ctx->output_len, this is guaranteed for us. However, we do validate
+     * that we have at least one iteration, otherwise our PRF wouldn't output
+     * anything. */
+    if (num_iters == 0) {
+        PORT_SetError(SEC_ERROR_INVALID_ARGS);
+        return SECFailure;
+    }
+
+    return SECSuccess;
+}
+
 SECStatus KBKDF_Derive(KBKDFContext *ctx, const unsigned char *key,
                        unsigned int key_len,
                        const unsigned char *label,
@@ -121,9 +172,35 @@ SECStatus KBKDF_Derive(KBKDFContext *ctx, const unsigned char *key,
                        unsigned int context_len,
                        const unsigned char *iv,
                        unsigned int iv_len,
-                       const unsigned char *result,
+                       unsigned char *result,
                        unsigned int result_len) {
-    return SECFailure;
+    if (ctx == NULL || key == NULL || label == NULL || context == NULL) {
+        PORT_SetError(SEC_ERROR_INVALID_ARGS);
+        return SECFailure;
+    }
+
+    /* Feedback chaining mode is the only place where IV is used; otherwise,
+     * we ignore its value. */
+    if (ctx->chainingType == KBKDF_FEEDBACK && iv == NULL) {
+        PORT_SetError(SEC_ERROR_INVALID_ARGS);
+        return SECFailure;
+    }
+
+    kbkdf_PRFType prf_ctx = NULL;
+    unsigned int num_iters = (result_len + (ctx->output_len - 1)) / ctx->output_len;
+    SECStatus result = SECFailure;
+
+    if (kbkdf_ValidateNumIters(ctx, num_iters) != SECSuccess) {
+        return SECFailure;
+    }
+
+    for (int i = 1; i <= num_iters; i++) {
+        unsigned int offset = (i - 1) * ctx->output_len;
+        unsigned char *result_offset = result + offset;
+        result = // SOMETHING
+    }
+
+    return result;
 }
 
 void KBKDF_Destroy(KBKDFContext *ctx, PRBool free_it) {
