@@ -2,17 +2,21 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-#include "kbkdf.h"
 #include "blapi.h"
-#include "blapit.h"
+#include "kbkdf.h"
+
+#include "alghmac.h"
+#include "cmac.h"
+#include "secerr.h"
+
+typedef union {
+    CMACContext *cmac;
+     HMACContext *hmac;
+} kbkdf_PRFType;
 
 struct KBKDFContextStr {
     /* Pseudo-random function we're using for this KDF. */
     KBKDFPrf prfType;
-    union {
-        CMACContext cmac;
-        HMACContext hmac;
-    } prf;
 
     /* Mode of the KDF to use; there are three:
      *
@@ -39,7 +43,7 @@ struct KBKDFContextStr {
     unsigned int counter_len;
 };
 
-SECStatus KBKDF_Init(KBKDFContext *ctx, KBKDF_PRF prf, KBKDFMode mode,
+SECStatus KBKDF_Init(KBKDFContext *ctx, KBKDFPrf prf, KBKDFMode mode,
                      unsigned int output_bitlen, unsigned int counter_bitlen) {
     if (ctx == NULL) {
         return SECFailure;
@@ -70,8 +74,8 @@ SECStatus KBKDF_Init(KBKDFContext *ctx, KBKDF_PRF prf, KBKDFMode mode,
                 break;
             default:
                 /* We expected a known constant. If someone hits this assert,
-                 * the caller has passed an invalid KBKDF_PRF constant. This
-                 * might happen during development when a new KBKDF_PRF
+                 * the caller has passed an invalid KBKDFPrf constant. This
+                 * might happen during development when a new KBKDFPrf
                  * constant is added but is not yet finished. */
                 PORT_Assert(0);
                 PORT_SetError(SEC_ERROR_INVALID_ARGS);
@@ -84,23 +88,19 @@ SECStatus KBKDF_Init(KBKDFContext *ctx, KBKDF_PRF prf, KBKDFMode mode,
         PORT_SetError(SEC_ERROR_INVALID_ARGS);
         return SECFailure;
     }
-    ctx->output_bitlen;
+    ctx->output_len = output_bitlen / 8;
 
     /* Validate assumptions we gave in kbkdf.h. */
     if (counter_bitlen == 0 || counter_bitlen > 64 || (counter_bitlen % 8) != 0) {
         PORT_SetError(SEC_ERROR_INVALID_ARGS);
         return SECFailure;
     }
-    ctx->counter_bitlen = counter_bitlen / 8;
-
-    /* Since the key the PRF is initialized with depends on values passed to
-     * KBKDF_Derive, we don't initialize it here. This gives us the benefit of
-     * not needing to free it in KBKDF_Destroy either. */
+    ctx->counter_len = counter_bitlen / 8;
 
     return SECSuccess;
 }
 
-KBKDFContext *KBKDF_Create(KBKDF_PRF prf, KBKDFMode mode,
+KBKDFContext *KBKDF_Create(KBKDFPrf prf, KBKDFMode mode,
                            unsigned int output_bitlen,
                            unsigned int counter_bitlen) {
     KBKDFContext *result = PORT_New(KBKDFContext);
@@ -122,19 +122,14 @@ SECStatus KBKDF_Derive(KBKDFContext *ctx, const unsigned char *key,
                        const unsigned char *iv,
                        unsigned int iv_len,
                        const unsigned char *result,
-                       unsigned int result) {
-
+                       unsigned int result_len) {
+    return SECFailure;
 }
 
 void KBKDF_Destroy(KBKDFContext *ctx, PRBool free_it) {
     if (ctx == NULL) {
         return;
     }
-
-    /* Assumption: the PRF gets initialized and destroyed at each call to
-     * KBKDF_Derive. While this *can* create a little bit of churn, it is
-     * necessary because the key of the PRF might change each call to Derive.
-     * Thus we don't need to free it here. */
 
     PORT_Memset(ctx, 0, sizeof(*ctx));
 
