@@ -55,8 +55,10 @@ struct KBKDFContextStr {
     unsigned int counter_len;
 };
 
-SECStatus KBKDF_Init(KBKDFContext *ctx, KBKDFPrf prf, KBKDFMode mode,
-                     unsigned int output_bitlen, unsigned int counter_bitlen) {
+SECStatus
+KBKDF_Init(KBKDFContext *ctx, KBKDFPrf prf, KBKDFMode mode,
+           unsigned int output_bitlen, unsigned int counter_bitlen)
+{
     if (ctx == NULL) {
         return SECFailure;
     }
@@ -112,7 +114,7 @@ SECStatus KBKDF_Init(KBKDFContext *ctx, KBKDFPrf prf, KBKDFMode mode,
 
     /* counter_bitlen cannot be zero if we're in counter mode: we need at
      * least one bit to count with! */
-    if (ctx->prfType == KBKDF_COUNTER && coutner_bitlen == 0) {
+    if (ctx->chainingType == KBKDF_COUNTER && counter_bitlen == 0) {
         PORT_SetError(SEC_ERROR_INVALID_ARGS);
         return SECFailure;
     }
@@ -121,12 +123,14 @@ SECStatus KBKDF_Init(KBKDFContext *ctx, KBKDFPrf prf, KBKDFMode mode,
     return SECSuccess;
 }
 
-KBKDFContext *KBKDF_Create(KBKDFPrf prf, KBKDFMode mode,
-                           unsigned int output_bitlen,
-                           unsigned int counter_bitlen) {
+KBKDFContext *
+KBKDF_Create(KBKDFPrf prf, KBKDFMode mode,
+             unsigned int output_bitlen,
+             unsigned int counter_bitlen)
+{
     KBKDFContext *result = PORT_New(KBKDFContext);
     if (KBKDF_Init(result, prf, mode, output_bitlen, counter_bitlen) !=
-            SECSuccess) {
+        SECSuccess) {
         KBKDF_Destroy(result, PR_TRUE);
         return NULL;
     }
@@ -134,15 +138,16 @@ KBKDFContext *KBKDF_Create(KBKDFPrf prf, KBKDFMode mode,
     return result;
 }
 
-SECStatus kbkdf_ValidateNumIters(KBKDFContext *ctx, unsigned int num_iters) {
-    if (ctx->chainingType == KBKDF_COUNTER ||
-            (ctx->chainingType == KBKDF_FEEDBACK && ctx->counter_len > 0)) {
+SECStatu / Feedbacks
+           kbkdf_ValidateNumIters(KBKDFContext *ctx, unsigned int num_iters)
+{
+    if (ctx->chainingType == KBKDF_COUNTER || ctx->counter_len > 0) {
         /* We validate that the size of num_iters is fine for our counter.
          * Interestingly, NIST 800-108 doesn't specify whether this check is
-         * necessary for the Feedback mode with optional counter; since they
-         * don't explicitly specify that the counter can wrap, we take the
-         * view that its invalid to request more iterations than what the
-         * counter provides. */
+         * necessary for Feedback and Double-Pipeline modes with optional
+         * counter; since they don't explicitly specify that the counter can
+         * wrap, we take the position that its invalid to request more PRF
+         * iterations than what the counter can track. Thus it is an error. */
         if (num_iters >= (1 << (8 * ctx->counter_len))) {
             PORT_SetError(SEC_ERROR_INVALID_ARGS);
             return SECFailure;
@@ -152,8 +157,8 @@ SECStatus kbkdf_ValidateNumIters(KBKDFContext *ctx, unsigned int num_iters) {
     }
 
     /* Technically we're supposed to validate that num_iters <= (2^32) - 1.
-     * Since we're using an unsigned int for both result_len and
-     * ctx->output_len, this is guaranteed for us. However, we do validate
+     * Since we're using an unsigned int for result_len, ctx->output_len,
+     * and num_iters, this is guaranteed for us. However, we do validate
      * that we have at least one iteration, otherwise our PRF wouldn't output
      * anything. */
     if (num_iters == 0) {
@@ -164,16 +169,19 @@ SECStatus kbkdf_ValidateNumIters(KBKDFContext *ctx, unsigned int num_iters) {
     return SECSuccess;
 }
 
-SECStatus KBKDF_Derive(KBKDFContext *ctx, const unsigned char *key,
-                       unsigned int key_len,
-                       const unsigned char *label,
-                       unsigned int label_len,
-                       const unsigned char *context,
-                       unsigned int context_len,
-                       const unsigned char *iv,
-                       unsigned int iv_len,
-                       unsigned char *result,
-                       unsigned int result_len) {
+SECStatus
+KBKDF_Derive(KBKDFContext *ctx,
+             const unsigned char *key,
+             unsigned int key_len,
+             const unsigned char *label,
+             unsigned int label_len,
+             const unsigned char *context,
+             unsigned int context_len,
+             const unsigned char *iv,
+             unsigned int iv_len,
+             unsigned char *result,
+             unsigned int result_len)
+{
     if (ctx == NULL || key == NULL || label == NULL || context == NULL) {
         PORT_SetError(SEC_ERROR_INVALID_ARGS);
         return SECFailure;
@@ -186,29 +194,37 @@ SECStatus KBKDF_Derive(KBKDFContext *ctx, const unsigned char *key,
         return SECFailure;
     }
 
-    kbkdf_PRFType prf_ctx = NULL;
+    kbkdf_PRFType prf_ctx;
+    unsigned int cur_iter;
     unsigned int num_iters = (result_len + (ctx->output_len - 1)) / ctx->output_len;
-    SECStatus result = SECFailure;
+    unsigned char *round_data;
 
     if (kbkdf_ValidateNumIters(ctx, num_iters) != SECSuccess) {
         return SECFailure;
     }
 
-    for (int i = 1; i <= num_iters; i++) {
-        unsigned int offset = (i - 1) * ctx->output_len;
-        unsigned char *result_offset = result + offset;
-        result = // SOMETHING
+    if (kbkdf_ConstructRoundData(ctx, iv, iv_len, label, label_len, context,
+                                 context_len, key_len) != SECSuccess) {
+        return SECFailure;
     }
 
-    return result;
+    for (cur_iter = 1; cur_iter <= num_iters; cur_iter++) {
+        unsigned int offset = (cur_iter - 1) * ctx->output_len;
+        unsigned char *result_offset = result + offset;
+    }
+
+    return SECSuccess;
 }
 
-void KBKDF_Destroy(KBKDFContext *ctx, PRBool free_it) {
+void
+KBKDF_Destroy(KBKDFContext *ctx, PRBool free_it)
+{
     if (ctx == NULL) {
         return;
     }
 
-    PORT_Memset(ctx, 0, sizeof(*ctx));
+    /* We store no sensitive information in our context so we don't need to
+     * zero it. */
 
     if (free_it == PR_TRUE) {
         PORT_Free(ctx);
