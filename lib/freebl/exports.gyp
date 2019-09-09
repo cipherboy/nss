@@ -37,6 +37,7 @@
             'ecl/ecl.h',
             'ecl/eclt.h',
             'hmacct.h',
+            'kbkdf.h',
             'secmpi.h',
             'secrng.h'
           ],
