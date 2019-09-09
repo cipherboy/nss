@@ -138,16 +138,11 @@ KBKDF_Create(KBKDFPrf prf, KBKDFMode mode,
     return result;
 }
 
-SECStatu / Feedbacks
-           kbkdf_ValidateNumIters(KBKDFContext *ctx, unsigned int num_iters)
+SECStatus
+kbkdf_ValidateNumIters(KBKDFContext *ctx, unsigned int num_iters)
 {
-    if (ctx->chainingType == KBKDF_COUNTER || ctx->counter_len > 0) {
-        /* We validate that the size of num_iters is fine for our counter.
-         * Interestingly, NIST 800-108 doesn't specify whether this check is
-         * necessary for Feedback and Double-Pipeline modes with optional
-         * counter; since they don't explicitly specify that the counter can
-         * wrap, we take the position that its invalid to request more PRF
-         * iterations than what the counter can track. Thus it is an error. */
+    if (ctx->chainingType == KBKDF_COUNTER) {
+        /* We validate that the size of num_iters is fine for our counter. */
         if (num_iters >= (1 << (8 * ctx->counter_len))) {
             PORT_SetError(SEC_ERROR_INVALID_ARGS);
             return SECFailure;
@@ -156,14 +151,58 @@ SECStatu / Feedbacks
         /* Don't return as we want the non-zero check. */
     }
 
-    /* Technically we're supposed to validate that num_iters <= (2^32) - 1.
-     * Since we're using an unsigned int for result_len, ctx->output_len,
-     * and num_iters, this is guaranteed for us. However, we do validate
-     * that we have at least one iteration, otherwise our PRF wouldn't output
-     * anything. */
+    /* Technically we're supposed to validate that num_iters <= (2^32) - 1
+     * for Feedback and Double-Pipeline chaining modes. Since we're using an
+     * unsigned int for result_len, ctx->output_len, and num_iters, this is
+     * guaranteed for us. However, we do validate that we have at least one
+     * iteration, otherwise our PRF wouldn't output anything. */
     if (num_iters == 0) {
         PORT_SetError(SEC_ERROR_INVALID_ARGS);
         return SECFailure;
+    }
+
+    return SECSuccess;
+}
+
+SECStatus
+kbkdf_ConstructRoundData(KBKDFContext *ctx,
+                         const unsigned char *iv,
+                         unsigned int iv_len,
+                         const unsigned char *label,
+                         unsigned int label_len,
+                         unsigned int separator_len,
+                         const unsigned char *context,
+                         unsigned int context_len,
+                         unsigned int result_len,
+                         unsigned int result_bit_len,
+                         unsigned char **round_data,
+                         unsigned int *round_data_len)
+{
+    switch (ctx->chainingType) {
+        case KBKDF_COUNTER:
+            /* Counter chaining mode has no data passed from round to round
+             * besides the incrementing counter. */
+            *round_data = NULL;
+            *round_data_len = 0;
+            break;
+        case KBKDF_FEEDBACK:
+            *round_data = (unsigned char *)PORT_ZAlloc(iv_len);
+            if (*round_data == NULL) {
+                PORT_SetError(SEC_ERROR_NO_MEMORY);
+                return SECFailure;
+            }
+
+            *round_data_len = iv_len;
+            PORT_Memcpy(*round_data, iv, iv_len);
+            break;
+        case KBKDF_DOUBLE_PIPELINE:
+
+            break;
+        default:
+            /* If you hit this assert, you're either trying to define a new
+             * KDF chaining mode or you were passed invalid data. */
+            PORT_Assert(0);
+            return SECFailure;
     }
 
     return SECSuccess;
@@ -175,12 +214,14 @@ KBKDF_Derive(KBKDFContext *ctx,
              unsigned int key_len,
              const unsigned char *label,
              unsigned int label_len,
+             unsigned int separator_len,
              const unsigned char *context,
              unsigned int context_len,
              const unsigned char *iv,
              unsigned int iv_len,
              unsigned char *result,
-             unsigned int result_len)
+             unsigned int result_len,
+             unsigned int result_bit_len)
 {
     if (ctx == NULL || key == NULL || label == NULL || context == NULL) {
         PORT_SetError(SEC_ERROR_INVALID_ARGS);
@@ -194,17 +235,23 @@ KBKDF_Derive(KBKDFContext *ctx,
         return SECFailure;
     }
 
+    /* We assume result_bit_len is a multiple of 8, is large enough to fit
+     * result_len, and is bounded above by 32. */
+
     kbkdf_PRFType prf_ctx;
-    unsigned int cur_iter;
+    unsigned long long int cur_iter;
     unsigned int num_iters = (result_len + (ctx->output_len - 1)) / ctx->output_len;
     unsigned char *round_data;
+    unsigned int round_data_len;
 
     if (kbkdf_ValidateNumIters(ctx, num_iters) != SECSuccess) {
         return SECFailure;
     }
 
-    if (kbkdf_ConstructRoundData(ctx, iv, iv_len, label, label_len, context,
-                                 context_len, key_len) != SECSuccess) {
+    if (kbkdf_ConstructRoundData(ctx, iv, iv_len, label, label_len,
+                                 separator_len, context, context_len,
+                                 result_len, result_bit_len, &round_data,
+                                 &round_data_len) != SECSuccess) {
         return SECFailure;
     }
 
@@ -212,6 +259,8 @@ KBKDF_Derive(KBKDFContext *ctx,
         unsigned int offset = (cur_iter - 1) * ctx->output_len;
         unsigned char *result_offset = result + offset;
     }
+
+    PORT_ZFree(round_data, round_data_len);
 
     return SECSuccess;
 }
