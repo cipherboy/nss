@@ -42,13 +42,19 @@ class Pkcs11KbkdfTest : public ::testing::Test {
     SECItem key_item = {siBuffer, key, sizeof(key)/sizeof(key[0])};
     ScopedPK11SymKey p11_key = ImportKey(CKM_AES_CMAC, &key_item);
 
+    CK_SP800_108_COUNTER_FORMAT iterator = {CK_FALSE, 8};
+
+    CK_PRF_DATA_PARAM dataParams[] = {
+      { CK_SP800_108_ITERATION_VARIABLE, &iterator, sizeof(iterator) }
+    };
+
     CK_SP800_108_KDF_PARAMS kdfParams =
     {
       CKM_AES_CMAC,
-      0,
-      NULL,
-      0, /* no addition derived keys */
-      NULL     /* no addition derived keys */
+      1,
+      dataParams,
+      0,       /* no additional derived keys */
+      NULL     /* no additional derived keys */
     };
 
     SECItem kdfItem = { siBuffer, (unsigned char *)&kdfParams, sizeof(kdfParams) };
