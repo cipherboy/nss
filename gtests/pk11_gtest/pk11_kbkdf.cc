@@ -43,15 +43,17 @@ class Pkcs11KbkdfTest : public ::testing::Test {
     ScopedPK11SymKey p11_key = ImportKey(CKM_AES_CMAC, &key_item);
 
     CK_SP800_108_COUNTER_FORMAT iterator = {CK_FALSE, 8};
+    CK_SP800_108_DKM_LENGTH_FORMAT dkm = { CK_SP800_108_DKM_LENGTH_SUM_OF_KEYS, CK_FALSE, 8 };
 
     CK_PRF_DATA_PARAM dataParams[] = {
-      { CK_SP800_108_ITERATION_VARIABLE, &iterator, sizeof(iterator) }
+      { CK_SP800_108_ITERATION_VARIABLE, &iterator, sizeof(iterator) },
+      { CK_SP800_108_DKM_LENGTH, &dkm, sizeof(dkm) }
     };
 
     CK_SP800_108_KDF_PARAMS kdfParams =
     {
       CKM_AES_CMAC,
-      1,
+      2,
       dataParams,
       0,       /* no additional derived keys */
       NULL     /* no additional derived keys */
