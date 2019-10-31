@@ -62,7 +62,7 @@ class Pkcs11KbkdfTest : public ::testing::Test {
 
     SECItem kdfItem = { siBuffer, (unsigned char *)&kdfParams, sizeof(kdfParams) };
 
-    PK11SymKey *result = PK11_Derive(p11_key.get(), CKM_SP800_108_COUNTER_KDF, &kdfItem, CKM_AES_GCM, CKA_ENCRYPT, 0);
+    PK11SymKey *result = PK11_Derive(p11_key.get(), CKM_SP800_108_COUNTER_KDF, &kdfItem, CKM_AES_CBC, CKA_ENCRYPT, AES_128_KEY_LENGTH);
 
     if (result == NULL) {
       fprintf(stderr, "Error: %u - %s - %s\n", PORT_GetError(), PORT_ErrorToName(PORT_GetError()), PORT_ErrorToString(PORT_GetError()));
