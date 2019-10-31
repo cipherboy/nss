@@ -9,6 +9,7 @@
 #include "pk11pub.h"
 #include "secerr.h"
 #include "sechash.h"
+#include "stdio.h"
 
 #include "blapi.h"
 
@@ -62,6 +63,11 @@ class Pkcs11KbkdfTest : public ::testing::Test {
     SECItem kdfItem = { siBuffer, (unsigned char *)&kdfParams, sizeof(kdfParams) };
 
     PK11SymKey *result = PK11_Derive(p11_key.get(), CKM_SP800_108_COUNTER_KDF, &kdfItem, CKM_AES_GCM, CKA_ENCRYPT, 0);
+
+    if (result == NULL) {
+      fprintf(stderr, "Error: %u - %s - %s\n", PORT_GetError(), PORT_ErrorToName(PORT_GetError()), PORT_ErrorToString(PORT_GetError()));
+    }
+
     assert(result != NULL);
   }
 };
