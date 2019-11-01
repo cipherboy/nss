@@ -30,12 +30,19 @@ typedef enum {
     KBKDF_DOUBLE_PIPELINE = 2
 } KBKDFMode;
 
+#define KBKDF_COUNTER 0x1
+#define KBKDF_LABEL 0x2
+#define KBKDF_SEPARATOR 0x3
+
 /* Initialize an existing KBKDFContext struct. This takes four parameters:
  *
  *  - prf, the underlying pseudo-random function to use,
  *  - mode, the chaining mode to use,
  *  - output_bitlen, the number of bits in the output size,
- *  - counter_bitlen, the number of bits to use for the internal counter.
+ *  - counter_bitlen, the number of bits to use for the internal counter,
+ *  - result_bitlen, the number of bits to use when writing the result length,
+ *  - field_order, the order of fields as passed to the PRF call, and the
+ *                 endianness of each field.
  *
  *  We place the restriction here counter_bitlen is a multiple of 8 and at is
  *  most 64. Thus it can always be represented as a 64-bit integer value and
@@ -47,7 +54,8 @@ typedef enum {
  *  we should use the actual output size of the PRF.
  */
 SECStatus KBKDF_Init(KBKDFContext *ctx, KBKDFPrf prf, KBKDFMode mode,
-                     unsigned int output_bitlen, unsigned int counter_bitlen);
+                     unsigned int output_bitlen, unsigned int counter_bitlen
+                     unsigned int result_bitlen, unsigned int field_order);
 
 /* Create and initialize a new KBKDF context with the specified parameters.
  * The caller is responsible for freeing the result via KBKDF_Destroy. See
@@ -70,7 +78,6 @@ KBKDFContext *KBKDF_Create(KBKDFPrf prf, KBKDFMode mode,
  *  - iv_len, the length of iv, in bytes,
  *  - result (K0), an allocated buffer to place the resulting key material in,
  *  - result_len (L), the length of result, in bytes.
- *  - result_bit_len (|L|_2), the length of L, in bits.
  */
 SECStatus KBKDF_Derive(KBKDFContext *ctx,
                        const unsigned char *key,
@@ -83,8 +90,7 @@ SECStatus KBKDF_Derive(KBKDFContext *ctx,
                        const unsigned char *iv,
                        unsigned int iv_len,
                        unsigned char *result,
-                       unsigned int result_len,
-                       unsigned int result_bit_len);
+                       unsigned long long int result_len);
 
 /* Destroy a KBKDF Context, optionally freeing it. */
 void KBKDF_Destroy(KBKDFContext *ctx, PRBool free_it);
