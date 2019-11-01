@@ -42,6 +42,9 @@ struct KBKDFContextStr {
      */
     KBKDFMode chainingType;
 
+    /* Endianness */
+    KBKDFByteOrder endianness;
+
     /* Size (in bytes) of the amount of output to take from each PRF call.
      *
      * Note: this differs from the input to KBKDF_{Init,Create} because it
@@ -164,6 +167,55 @@ kbkdf_ValidateNumIters(KBKDFContext *ctx, unsigned int num_iters)
     return SECSuccess;
 }
 
+void
+kbkdf_WriteResultLength(KBKDFContext *ctx, unsigned char *result,
+                        unsigned long long int result_len,
+                        unsigned int result_bit_len)
+{
+    unsigned long long int result_len_in_bits = result_len * 8;
+    if (ctx->endiannes == KBKDF_BigEndian) {
+        switch (result_bit_len) {
+            case 8:
+                *result = (unsigned char)(result_len & 0xFF);
+                break;
+            case 16:
+                break;
+            case 24:
+                break;
+            case 32:
+                break;
+            case 40:
+                break;
+            case 48:
+                break;
+            case 56:
+                break;
+            case 64:
+                break;
+        }
+    } else {
+        switch (result_bit_len) {
+            case 8:
+                *result = (unsigned char)(result_len & 0xFF);
+                break;
+            case 16:
+                break;
+            case 24:
+                break;
+            case 32:
+                break;
+            case 40:
+                break;
+            case 48:
+                break;
+            case 56:
+                break;
+            case 64:
+                break;
+        }
+    }
+}
+
 SECStatus
 kbkdf_ConstructRoundData(KBKDFContext *ctx,
                          const unsigned char *iv,
@@ -173,7 +225,7 @@ kbkdf_ConstructRoundData(KBKDFContext *ctx,
                          unsigned int separator_len,
                          const unsigned char *context,
                          unsigned int context_len,
-                         unsigned int result_len,
+                         unsigned long long int result_len,
                          unsigned int result_bit_len,
                          unsigned char **round_data,
                          unsigned int *round_data_len)
@@ -182,21 +234,53 @@ kbkdf_ConstructRoundData(KBKDFContext *ctx,
         case KBKDF_COUNTER:
             /* Counter chaining mode has no data passed from round to round
              * besides the incrementing counter. */
-            *round_data = NULL;
             *round_data_len = 0;
+            *round_data = NULL;
             break;
         case KBKDF_FEEDBACK:
-            *round_data = (unsigned char *)PORT_ZAlloc(iv_len);
+            /* Feedback chaining mode takes the iv parameter and reuses that.
+             * Since we assume that we can free round_data inside our loop, we
+             * copy iv into round_data. */
+            *round_data_len = iv_len;
+            *round_data = (unsigned char *)PORT_ZAlloc(*round_data_len);
             if (*round_data == NULL) {
                 PORT_SetError(SEC_ERROR_NO_MEMORY);
                 return SECFailure;
             }
 
-            *round_data_len = iv_len;
-            PORT_Memcpy(*round_data, iv, iv_len);
+            PORT_Memcpy(*round_data, iv, *round_data_len);
             break;
         case KBKDF_DOUBLE_PIPELINE:
+            unsigned char *round_offset;
 
+            *round_data_len = label_len + separator_len + context_len + (result_bit_len / 8);
+            if (round_data_len < label_len || round_data_len < separator_len ||
+                round_data_len < context_len || round_data_len < (result_bit_len / 8)) {
+                /* We had an arithmetic overflow because our arguments are
+                 * too large. Refuse to continue. */
+                PORT_SetError(SEC_ERROR_NO_MEMORY);
+                return SECFailure;
+            }
+
+            *round_data = (unsigned char *)PORT_ZAlloc(*round_data_len);
+            if (*round_data == NULL) {
+                PORT_SetError(SEC_ERROR_NO_MEMORY);
+                return SECFailure;
+            }
+            round_offset = *round_data;
+
+            PORT_Memcpy(round_offset, label, label_len);
+            round_offset += label_len;
+
+            /* Since we used PORT_ZAlloc, *round_data has been initialized to
+             * all zeros; this means we can simply skip the separator length
+             * without explicitly zeroing it. */
+            round_offset += separator_len;
+
+            PORT_Memcpy(round_offset, context, context_len);
+            round_offset += context_len;
+
+            kbkdf_WriteResultLength(ctx, round_offset, result_len, result_bit_len);
             break;
         default:
             /* If you hit this assert, you're either trying to define a new
@@ -220,7 +304,7 @@ KBKDF_Derive(KBKDFContext *ctx,
              const unsigned char *iv,
              unsigned int iv_len,
              unsigned char *result,
-             unsigned int result_len,
+             unsigned long long int result_len,
              unsigned int result_bit_len)
 {
     if (ctx == NULL || key == NULL || label == NULL || context == NULL) {
@@ -235,8 +319,22 @@ KBKDF_Derive(KBKDFContext *ctx,
         return SECFailure;
     }
 
-    /* We assume result_bit_len is a multiple of 8, is large enough to fit
-     * result_len, and is bounded above by 32. */
+    /* We assume result_bit_len is a multiple of 8, is bounded below by 0,
+     * and is bounded above by 64. */
+    if (result_bit_len == 0 || result_bit_len > 64 ||
+        (result_bit_len % 8) != 0) {
+        PORT_SetError(SEC_ERROR_INVALID_ARGS);
+        return SECFailure;
+    }
+
+    /* When result_bit_len isn't 64, validate that it is large enough to hold
+     * result_len. Otherwise, since result_len is 64 bits, 64 bits is clearly
+     * enough to hold result_len. */
+    if (result_bit_len < 64 &&
+        (1ULL << ((unsigned long long int)result_bit_len)) <= result_len) {
+        PORT_SetError(SEC_ERROR_INVALID_ARGS);
+        return SECFailure;
+    }
 
     kbkdf_PRFType prf_ctx;
     unsigned long long int cur_iter;
