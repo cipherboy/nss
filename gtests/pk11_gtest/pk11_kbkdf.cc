@@ -94,7 +94,7 @@ class Pkcs11KbkdfTest : public ::testing::Test {
 TEST_F(Pkcs11KbkdfTest, TestNISTCAVPCounterBeforeFixed) {
   for (size_t offset = 0; offset < PK11_KBKDFCounterBeforeFixed_Len; offset++) {
     CounterBeforeFixed test = PK11_KBKDFCounterBeforeFixed[offset];
-    fprintf(stderr, "Running test %zu...\n", offset);
+    // fprintf(stderr, "Running test %zu...\n", offset);
     RunCounterBeforeFixedTest(test.prf_mech, test.counter_bitlen, test.output_bitlen, test.key, test.key_len, test.fixed_input, test.fixed_input_len, test.expected);
   }
 }
