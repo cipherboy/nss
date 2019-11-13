@@ -39,6 +39,33 @@ class Pkcs11KbkdfTest : public ::testing::Test {
     return result;
   }
 
+  void RunCounterKDF(CK_MECHANISM_TYPE prf_mech, CK_SP800_108_KDF_PARAMS_PTR kdf_params, uint32_t output_bitlen, uint8_t *key, uint32_t key_len, uint8_t *expected) {
+    SECItem key_item = {siBuffer, key, key_len};
+    ScopedPK11SymKey p11_key = ImportKey(prf_mech, &key_item);
+
+    /* Build our SECItem with our passed parameters. */
+    assert(kdf_params != NULL);
+    SECItem params_item = { siBuffer, (unsigned char *)kdf_params, sizeof(*kdf_params) };
+
+    /* Validate that our output is an even number of bytes. */
+    ASSERT_EQ((output_bitlen % 8), 0u);
+
+    /* Choose CKM_SHA512_HMAC because it is long enough to hold all CAVP
+     * key sizes. */
+    ScopedPK11SymKey result(PK11_Derive(p11_key.get(), CKM_SP800_108_COUNTER_KDF, &params_item, CKM_SHA512_HMAC, CKA_SIGN, output_bitlen/8));
+    ASSERT_NE(result, nullptr);
+
+    ASSERT_EQ(PK11_ExtractKeyValue(result.get()), SECSuccess);
+
+    /* We don't need to free this -- it is just a reference... */
+    SECItem *actual_item = PK11_GetKeyData(result.get());
+    ASSERT_NE(actual_item, nullptr);
+
+    /* Wrap our expected output in a SECItem for easy comparisons. */
+    SECItem expected_item = {siBuffer, expected, output_bitlen/8};
+    ASSERT_EQ(SECITEM_CompareItem(actual_item, &expected_item), 0);
+  }
+
   void RunCounterBeforeFixedTest(CK_MECHANISM_TYPE prf_mech, uint32_t counter_bitlen, uint32_t output_bitlen, uint8_t *key, uint32_t key_len, uint8_t *fixed_input, uint32_t fixed_input_len, uint8_t *expected) {
     /* Counter mode tests with CTRLOCATION=BEFORE_FIXED use the following
      * setup:
@@ -50,9 +77,6 @@ class Pkcs11KbkdfTest : public ::testing::Test {
      * This generates an output of size (output_bitlen), which is compared
      * against (expected).
      */
-
-    SECItem key_item = {siBuffer, key, key_len};
-    ScopedPK11SymKey p11_key = ImportKey(prf_mech, &key_item);
 
     CK_SP800_108_COUNTER_FORMAT iterator = {CK_FALSE, counter_bitlen};
 
@@ -70,26 +94,7 @@ class Pkcs11KbkdfTest : public ::testing::Test {
       NULL     /* no additional derived keys */
     };
 
-    SECItem params_item = { siBuffer, (unsigned char *)&kdf_params, sizeof(kdf_params) };
-
-    assert((output_bitlen % 8) == 0);
-
-    /* Choose CKM_SHA512_HMAC because it is long enough to hold all CAVP
-     * key sizes. */
-    ScopedPK11SymKey result(PK11_Derive(p11_key.get(), CKM_SP800_108_COUNTER_KDF, &params_item, CKM_SHA512_HMAC, CKA_SIGN, output_bitlen/8));
-    if (result.get() == NULL) {
-      fprintf(stderr, "Error: %u - %s - %s\n", PORT_GetError(), PORT_ErrorToName(PORT_GetError()), PORT_ErrorToString(PORT_GetError()));
-    }
-    assert(result != NULL);
-
-    assert(PK11_ExtractKeyValue(result.get()) == SECSuccess);
-
-    /* We don't need to free this -- it is just a reference... */
-    SECItem *actual_item = PK11_GetKeyData(result.get());
-    assert(actual_item != NULL);
-
-    SECItem expected_item = {siBuffer, expected, output_bitlen/8};
-    assert(SECITEM_CompareItem(actual_item, &expected_item) == 0);
+    RunCounterKDF(prf_mech, &kdf_params, output_bitlen, key, key_len, expected);
   }
 
   void RunCounterMiddleFixedTest(CK_MECHANISM_TYPE prf_mech, uint32_t counter_bitlen, uint32_t output_bitlen, uint8_t *key, uint32_t key_len, uint8_t *before_fixed_input, uint32_t before_fixed_input_len, uint8_t *after_fixed_input, uint32_t after_fixed_input_len, uint8_t *expected) {
@@ -104,9 +109,6 @@ class Pkcs11KbkdfTest : public ::testing::Test {
      * This generates an output of size (output_bitlen), which is compared
      * against (expected).
      */
-
-    SECItem key_item = {siBuffer, key, key_len};
-    ScopedPK11SymKey p11_key = ImportKey(prf_mech, &key_item);
 
     CK_SP800_108_COUNTER_FORMAT iterator = {CK_FALSE, counter_bitlen};
 
@@ -125,26 +127,7 @@ class Pkcs11KbkdfTest : public ::testing::Test {
       NULL     /* no additional derived keys */
     };
 
-    SECItem params_item = { siBuffer, (unsigned char *)&kdf_params, sizeof(kdf_params) };
-
-    assert((output_bitlen % 8) == 0);
-
-    /* Choose CKM_SHA512_HMAC because it is long enough to hold all CAVP
-     * key sizes. */
-    ScopedPK11SymKey result(PK11_Derive(p11_key.get(), CKM_SP800_108_COUNTER_KDF, &params_item, CKM_SHA512_HMAC, CKA_SIGN, output_bitlen/8));
-    if (result.get() == NULL) {
-      fprintf(stderr, "Error: %u - %s - %s\n", PORT_GetError(), PORT_ErrorToName(PORT_GetError()), PORT_ErrorToString(PORT_GetError()));
-    }
-    assert(result != NULL);
-
-    assert(PK11_ExtractKeyValue(result.get()) == SECSuccess);
-
-    /* We don't need to free this -- it is just a reference... */
-    SECItem *actual_item = PK11_GetKeyData(result.get());
-    assert(actual_item != NULL);
-
-    SECItem expected_item = {siBuffer, expected, output_bitlen/8};
-    assert(SECITEM_CompareItem(actual_item, &expected_item) == 0);
+    RunCounterKDF(prf_mech, &kdf_params, output_bitlen, key, key_len, expected);
   }
 
   void RunCounterAfterFixedTest(CK_MECHANISM_TYPE prf_mech, uint32_t counter_bitlen, uint32_t output_bitlen, uint8_t *key, uint32_t key_len, uint8_t *fixed_input, uint32_t fixed_input_len, uint8_t *expected) {
@@ -158,10 +141,6 @@ class Pkcs11KbkdfTest : public ::testing::Test {
      * This generates an output of size (output_bitlen), which is compared
      * against (expected).
      */
-
-    SECItem key_item = {siBuffer, key, key_len};
-    ScopedPK11SymKey p11_key = ImportKey(prf_mech, &key_item);
-
     CK_SP800_108_COUNTER_FORMAT iterator = {CK_FALSE, counter_bitlen};
 
     CK_PRF_DATA_PARAM dataParams[] = {
@@ -178,26 +157,7 @@ class Pkcs11KbkdfTest : public ::testing::Test {
       NULL     /* no additional derived keys */
     };
 
-    SECItem params_item = { siBuffer, (unsigned char *)&kdf_params, sizeof(kdf_params) };
-
-    assert((output_bitlen % 8) == 0);
-
-    /* Choose CKM_SHA512_HMAC because it is long enough to hold all CAVP
-     * key sizes. */
-    ScopedPK11SymKey result(PK11_Derive(p11_key.get(), CKM_SP800_108_COUNTER_KDF, &params_item, CKM_SHA512_HMAC, CKA_SIGN, output_bitlen/8));
-    if (result.get() == NULL) {
-      fprintf(stderr, "Error: %u - %s - %s\n", PORT_GetError(), PORT_ErrorToName(PORT_GetError()), PORT_ErrorToString(PORT_GetError()));
-    }
-    assert(result != NULL);
-
-    assert(PK11_ExtractKeyValue(result.get()) == SECSuccess);
-
-    /* We don't need to free this -- it is just a reference... */
-    SECItem *actual_item = PK11_GetKeyData(result.get());
-    assert(actual_item != NULL);
-
-    SECItem expected_item = {siBuffer, expected, output_bitlen/8};
-    assert(SECITEM_CompareItem(actual_item, &expected_item) == 0);
+    RunCounterKDF(prf_mech, &kdf_params, output_bitlen, key, key_len, expected);
   }
 };
 
