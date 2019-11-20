@@ -17,13 +17,19 @@
 #include "nss_scoped_ptrs.h"
 #include "util.h"
 
+/* == Counter mode NIST CAVP test vectors == */
 #include "pk11_kbkdf_counterbeforefixed.h"
 #include "pk11_kbkdf_countermiddlefixed.h"
 #include "pk11_kbkdf_counterafterfixed.h"
+
+/* == Feedback mode NIST CAVP test vectors == */
 #include "pk11_kbkdf_feedbacknocounterfixed.h"
 #include "pk11_kbkdf_feedbackcounterbeforeiter.h"
 #include "pk11_kbkdf_feedbackcounterafteriter.h"
 #include "pk11_kbkdf_feedbackcounterafterfixed.h"
+
+/* == Pipeline mode CAVP test vectors == */
+#include "pk11_kbkdf_pipelinenocounterfixed.h"
 #include "pk11_kbkdf_pipelinecounterbeforeiter.h"
 #include "pk11_kbkdf_pipelinecounterafteriter.h"
 #include "pk11_kbkdf_pipelinecounterafterfixed.h"
@@ -44,7 +50,7 @@ class Pkcs11KbkdfTest : public ::testing::Test {
     return result;
   }
 
-  void RunCounterKDF(CK_MECHANISM_TYPE prf_mech, CK_SP800_108_KDF_PARAMS_PTR kdf_params, uint32_t output_bitlen, uint8_t *key, uint32_t key_len, uint8_t *expected) {
+  void RunKDF(CK_MECHANISM_TYPE kdf_mech, CK_MECHANISM_TYPE prf_mech, CK_SP800_108_KDF_PARAMS_PTR kdf_params, uint32_t output_bitlen, uint8_t *key, uint32_t key_len, uint8_t *expected) {
     SECItem key_item = {siBuffer, key, key_len};
     ScopedPK11SymKey p11_key = ImportKey(prf_mech, &key_item);
 
@@ -57,7 +63,7 @@ class Pkcs11KbkdfTest : public ::testing::Test {
 
     /* Choose CKM_SHA512_HMAC because it is long enough to hold all CAVP
      * key sizes. */
-    ScopedPK11SymKey result(PK11_Derive(p11_key.get(), CKM_SP800_108_COUNTER_KDF, &params_item, CKM_SHA512_HMAC, CKA_SIGN, output_bitlen/8));
+    ScopedPK11SymKey result(PK11_Derive(p11_key.get(), kdf_mech, &params_item, CKM_SHA512_HMAC, CKA_SIGN, output_bitlen/8));
     ASSERT_NE(result, nullptr);
 
     ASSERT_EQ(PK11_ExtractKeyValue(result.get()), SECSuccess);
@@ -98,45 +104,9 @@ class Pkcs11KbkdfTest : public ::testing::Test {
     ASSERT_EQ(SECITEM_CompareItem(actual_item, &expected_item), 0);
   }
 
-  void RunPipelineKDF(CK_MECHANISM_TYPE prf_mech, CK_SP800_108_KDF_PARAMS_PTR kdf_params, uint32_t output_bitlen, uint8_t *key, uint32_t key_len, uint8_t *expected) {
-    SECItem key_item = {siBuffer, key, key_len};
-    ScopedPK11SymKey p11_key = ImportKey(prf_mech, &key_item);
-
-    /* Build our SECItem with our passed parameters. */
-    ASSERT_NE(kdf_params, nullptr);
-    SECItem params_item = { siBuffer, (unsigned char *)kdf_params, sizeof(*kdf_params) };
-
-    /* Validate that our output is an even number of bytes. */
-    ASSERT_EQ((output_bitlen % 8), 0u);
-
-    /* Choose CKM_SHA512_HMAC because it is long enough to hold all CAVP
-     * key sizes. */
-    ScopedPK11SymKey result(PK11_Derive(p11_key.get(), CKM_SP800_108_DOUBLE_PIPELINE_KDF, &params_item, CKM_SHA512_HMAC, CKA_SIGN, output_bitlen/8));
-    ASSERT_NE(result, nullptr);
-
-    ASSERT_EQ(PK11_ExtractKeyValue(result.get()), SECSuccess);
-
-    /* We don't need to free this -- it is just a reference... */
-    SECItem *actual_item = PK11_GetKeyData(result.get());
-    ASSERT_NE(actual_item, nullptr);
-
-    /* Wrap our expected output in a SECItem for easy comparisons. */
-    SECItem expected_item = {siBuffer, expected, output_bitlen/8};
-    ASSERT_EQ(SECITEM_CompareItem(actual_item, &expected_item), 0);
-  }
+  /* == Helpers to run Counter mode CAVP tests == */
 
   void RunCounterBeforeFixedTest(CK_MECHANISM_TYPE prf_mech, uint32_t counter_bitlen, uint32_t output_bitlen, uint8_t *key, uint32_t key_len, uint8_t *fixed_input, uint32_t fixed_input_len, uint8_t *expected) {
-    /* Counter mode tests with CTRLOCATION=BEFORE_FIXED use the following
-     * setup:
-     *
-     * - First the big-endian counter (counter_bitlen),
-     * - Then a fixed byte array (fixed_input),
-     * - No other data to the PRF.
-     *
-     * This generates an output of size (output_bitlen), which is compared
-     * against (expected).
-     */
-
     CK_SP800_108_COUNTER_FORMAT iterator = {CK_FALSE, counter_bitlen};
 
     CK_PRF_DATA_PARAM dataParams[] = {
@@ -153,22 +123,10 @@ class Pkcs11KbkdfTest : public ::testing::Test {
       NULL     /* no additional derived keys */
     };
 
-    RunCounterKDF(prf_mech, &kdf_params, output_bitlen, key, key_len, expected);
+    RunKDF(CKM_SP800_108_COUNTER_KDF, prf_mech, &kdf_params, output_bitlen, key, key_len, expected);
   }
 
   void RunCounterMiddleFixedTest(CK_MECHANISM_TYPE prf_mech, uint32_t counter_bitlen, uint32_t output_bitlen, uint8_t *key, uint32_t key_len, uint8_t *before_fixed_input, uint32_t before_fixed_input_len, uint8_t *after_fixed_input, uint32_t after_fixed_input_len, uint8_t *expected) {
-    /* Counter mode tests with CTRLOCATION=MIDDLE_FIXED use the following
-     * setup:
-     *
-     * - First a fixed byte array (before_fixed_input),
-     * - Then the big-endian counter (counter_bitlen),
-     * - Then a fixed byte array (after_fixed_input),
-     * - No other data to the PRF.
-     *
-     * This generates an output of size (output_bitlen), which is compared
-     * against (expected).
-     */
-
     CK_SP800_108_COUNTER_FORMAT iterator = {CK_FALSE, counter_bitlen};
 
     CK_PRF_DATA_PARAM dataParams[] = {
@@ -186,20 +144,10 @@ class Pkcs11KbkdfTest : public ::testing::Test {
       NULL     /* no additional derived keys */
     };
 
-    RunCounterKDF(prf_mech, &kdf_params, output_bitlen, key, key_len, expected);
+    RunKDF(CKM_SP800_108_COUNTER_KDF, prf_mech, &kdf_params, output_bitlen, key, key_len, expected);
   }
 
   void RunCounterAfterFixedTest(CK_MECHANISM_TYPE prf_mech, uint32_t counter_bitlen, uint32_t output_bitlen, uint8_t *key, uint32_t key_len, uint8_t *fixed_input, uint32_t fixed_input_len, uint8_t *expected) {
-    /* Counter mode tests with CTRLOCATION=AFTER_FIXED use the following
-     * setup:
-     *
-     * - First a fixed byte array (fixed_input),
-     * - Then the big-endian counter (counter_bitlen),
-     * - No other data to the PRF.
-     *
-     * This generates an output of size (output_bitlen), which is compared
-     * against (expected).
-     */
     CK_SP800_108_COUNTER_FORMAT iterator = {CK_FALSE, counter_bitlen};
 
     CK_PRF_DATA_PARAM dataParams[] = {
@@ -216,20 +164,12 @@ class Pkcs11KbkdfTest : public ::testing::Test {
       NULL     /* no additional derived keys */
     };
 
-    RunCounterKDF(prf_mech, &kdf_params, output_bitlen, key, key_len, expected);
+    RunKDF(CKM_SP800_108_COUNTER_KDF, prf_mech, &kdf_params, output_bitlen, key, key_len, expected);
   }
 
+  /* == Helpers to run Feedback mode CAVP tests == */
+
   void RunFeedbackNoCounterFixedTest(CK_MECHANISM_TYPE prf_mech, uint32_t output_bitlen, uint8_t *key, uint32_t key_len, uint8_t *iv, uint32_t iv_len, uint8_t *fixed_input, uint32_t fixed_input_len, uint8_t *expected) {
-    /* Feedback mode tests with fixed input block data using the following
-     * setup:
-     *
-     *  - First the chaining value.
-     *  - Then a fixed byte array (fixed_input).
-     *  - No other data to the PRF.
-     *
-     * This generates an output of size (output_bitlen), which is compared
-     * against (expected).
-     */
     CK_PRF_DATA_PARAM dataParams[] = {
       { CK_SP800_108_ITERATION_VARIABLE, NULL, 0 },
       { CK_SP800_108_BYTE_ARRAY, fixed_input, fixed_input_len }
@@ -249,17 +189,6 @@ class Pkcs11KbkdfTest : public ::testing::Test {
   }
 
   void RunFeedbackCounterBeforeIterTest(CK_MECHANISM_TYPE prf_mech, uint32_t counter_bitlen, uint32_t output_bitlen, uint8_t *key, uint32_t key_len, uint8_t *iv, uint32_t iv_len, uint8_t *fixed_input, uint32_t fixed_input_len, uint8_t *expected) {
-    /* Feedback mode tests with fixed input block data using the following
-     * setup:
-     *
-     *  - First an optional iteration variable.
-     *  - Then the chaining value.
-     *  - Then a fixed byte array (fixed_input).
-     *  - No other data to the PRF.
-     *
-     * This generates an output of size (output_bitlen), which is compared
-     * against (expected).
-     */
     CK_SP800_108_COUNTER_FORMAT iterator = {CK_FALSE, counter_bitlen};
 
     CK_PRF_DATA_PARAM dataParams[] = {
@@ -282,17 +211,6 @@ class Pkcs11KbkdfTest : public ::testing::Test {
   }
 
   void RunFeedbackCounterAfterIterTest(CK_MECHANISM_TYPE prf_mech, uint32_t counter_bitlen, uint32_t output_bitlen, uint8_t *key, uint32_t key_len, uint8_t *iv, uint32_t iv_len, uint8_t *fixed_input, uint32_t fixed_input_len, uint8_t *expected) {
-    /* Feedback mode tests with fixed input block data using the following
-     * setup:
-     *
-     *  - First the chaining value.
-     *  - Then an optional iteration variable.
-     *  - Then a fixed byte array (fixed_input).
-     *  - No other data to the PRF.
-     *
-     * This generates an output of size (output_bitlen), which is compared
-     * against (expected).
-     */
     CK_SP800_108_COUNTER_FORMAT iterator = {CK_FALSE, counter_bitlen};
 
     CK_PRF_DATA_PARAM dataParams[] = {
@@ -315,17 +233,6 @@ class Pkcs11KbkdfTest : public ::testing::Test {
   }
 
   void RunFeedbackCounterAfterFixedTest(CK_MECHANISM_TYPE prf_mech, uint32_t counter_bitlen, uint32_t output_bitlen, uint8_t *key, uint32_t key_len, uint8_t *iv, uint32_t iv_len, uint8_t *fixed_input, uint32_t fixed_input_len, uint8_t *expected) {
-    /* Feedback mode tests with fixed input block data using the following
-     * setup:
-     *
-     *  - First the chaining value.
-     *  - Then a fixed byte array (fixed_input).
-     *  - Then an optional iteration variable.
-     *  - No other data to the PRF.
-     *
-     * This generates an output of size (output_bitlen), which is compared
-     * against (expected).
-     */
     CK_SP800_108_COUNTER_FORMAT iterator = {CK_FALSE, counter_bitlen};
 
     CK_PRF_DATA_PARAM dataParams[] = {
@@ -347,18 +254,26 @@ class Pkcs11KbkdfTest : public ::testing::Test {
     RunFeedbackKDF(prf_mech, &kdf_params, output_bitlen, key, key_len, expected);
   }
 
+  /* == Helpers to run Pipeline mode CAVP tests == */
+
+  void RunPipelineNoCounterFixedTest(CK_MECHANISM_TYPE prf_mech, uint32_t output_bitlen, uint8_t *key, uint32_t key_len, uint8_t *fixed_input, uint32_t fixed_input_len, uint8_t *expected) {
+    CK_PRF_DATA_PARAM dataParams[] = {
+      { CK_SP800_108_ITERATION_VARIABLE, NULL, 0 },
+      { CK_SP800_108_BYTE_ARRAY, fixed_input, fixed_input_len }
+    };
+
+    CK_SP800_108_KDF_PARAMS kdf_params = {
+      prf_mech,
+      2,
+      dataParams,
+      0,
+      NULL
+    };
+
+    RunKDF(CKM_SP800_108_DOUBLE_PIPELINE_KDF, prf_mech, &kdf_params, output_bitlen, key, key_len, expected);
+  }
+
   void RunPipelineCounterBeforeIterTest(CK_MECHANISM_TYPE prf_mech, uint32_t counter_bitlen, uint32_t output_bitlen, uint8_t *key, uint32_t key_len, uint8_t *fixed_input, uint32_t fixed_input_len, uint8_t *expected) {
-    /* Feedback mode tests with fixed input block data using the following
-     * setup:
-     *
-     *  - First an optional iteration variable.
-     *  - Then the chaining value.
-     *  - Then a fixed byte array (fixed_input).
-     *  - No other data to the PRF.
-     *
-     * This generates an output of size (output_bitlen), which is compared
-     * against (expected).
-     */
     CK_SP800_108_COUNTER_FORMAT iterator = {CK_FALSE, counter_bitlen};
 
     CK_PRF_DATA_PARAM dataParams[] = {
@@ -375,21 +290,10 @@ class Pkcs11KbkdfTest : public ::testing::Test {
       NULL
     };
 
-    RunPipelineKDF(prf_mech, &kdf_params, output_bitlen, key, key_len, expected);
+    RunKDF(CKM_SP800_108_DOUBLE_PIPELINE_KDF, prf_mech, &kdf_params, output_bitlen, key, key_len, expected);
   }
 
   void RunPipelineCounterAfterIterTest(CK_MECHANISM_TYPE prf_mech, uint32_t counter_bitlen, uint32_t output_bitlen, uint8_t *key, uint32_t key_len, uint8_t *fixed_input, uint32_t fixed_input_len, uint8_t *expected) {
-    /* Feedback mode tests with fixed input block data using the following
-     * setup:
-     *
-     *  - First the chaining value.
-     *  - Then an optional iteration variable.
-     *  - Then a fixed byte array (fixed_input).
-     *  - No other data to the PRF.
-     *
-     * This generates an output of size (output_bitlen), which is compared
-     * against (expected).
-     */
     CK_SP800_108_COUNTER_FORMAT iterator = {CK_FALSE, counter_bitlen};
 
     CK_PRF_DATA_PARAM dataParams[] = {
@@ -406,21 +310,10 @@ class Pkcs11KbkdfTest : public ::testing::Test {
       NULL
     };
 
-    RunPipelineKDF(prf_mech, &kdf_params, output_bitlen, key, key_len, expected);
+    RunKDF(CKM_SP800_108_DOUBLE_PIPELINE_KDF, prf_mech, &kdf_params, output_bitlen, key, key_len, expected);
   }
 
   void RunPipelineCounterAfterFixedTest(CK_MECHANISM_TYPE prf_mech, uint32_t counter_bitlen, uint32_t output_bitlen, uint8_t *key, uint32_t key_len, uint8_t *fixed_input, uint32_t fixed_input_len, uint8_t *expected) {
-    /* Feedback mode tests with fixed input block data using the following
-     * setup:
-     *
-     *  - First the chaining value.
-     *  - Then a fixed byte array (fixed_input).
-     *  - Then an optional iteration variable.
-     *  - No other data to the PRF.
-     *
-     * This generates an output of size (output_bitlen), which is compared
-     * against (expected).
-     */
     CK_SP800_108_COUNTER_FORMAT iterator = {CK_FALSE, counter_bitlen};
 
     CK_PRF_DATA_PARAM dataParams[] = {
@@ -437,7 +330,7 @@ class Pkcs11KbkdfTest : public ::testing::Test {
       NULL
     };
 
-    RunPipelineKDF(prf_mech, &kdf_params, output_bitlen, key, key_len, expected);
+    RunKDF(CKM_SP800_108_DOUBLE_PIPELINE_KDF, prf_mech, &kdf_params, output_bitlen, key, key_len, expected);
   }
 };
 
@@ -495,6 +388,13 @@ TEST_F(Pkcs11KbkdfTest, TestNISTCAVPFeedbackCounterAfterFixed) {
 }
 
 /* == Double Pipeline Tests == */
+
+TEST_F(Pkcs11KbkdfTest, TestNISTCAVPPipelineNoCounterFixed) {
+  for (size_t offset = 0; offset < PK11_KBKDFPipelineNoCounterFixed_Len; offset++) {
+    PipelineNoCounterFixed test = PK11_KBKDFPipelineNoCounterFixed[offset];
+    RunPipelineNoCounterFixedTest(test.prf_mech, test.output_bitlen, test.key, test.key_len, test.fixed_input, test.fixed_input_len, test.expected);
+  }
+}
 
 TEST_F(Pkcs11KbkdfTest, TestNISTCAVPPipelineCounterBeforeIter) {
   for (size_t offset = 0; offset < PK11_KBKDFPipelineCounterBeforeIter_Len; offset++) {
