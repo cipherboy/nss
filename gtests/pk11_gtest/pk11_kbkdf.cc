@@ -88,9 +88,15 @@ class Pkcs11KbkdfTest : public ::testing::Test {
     /* Validate that our output is an even number of bytes. */
     ASSERT_EQ(output_bitlen % 8, 0u);
 
+    /* Since RunKDF tests the ability to derive secret keys, test the ability
+     * to derive additional parameters. */
+    CK_ATTRIBUTE key_template[1];
+    CK_OBJECT_CLASS data = CKO_DATA;
+    key_template[0] = { CKA_CLASS, &data, sizeof(data) };
+
     /* Choose CKM_SHA512_HMAC because it is long enough to hold all CAVP
      * key sizes. */
-    ScopedPK11SymKey result(PK11_Derive(p11_key.get(), CKM_SP800_108_FEEDBACK_KDF, &params_item, CKM_SHA512_HMAC, CKA_SIGN, output_bitlen/8));
+    ScopedPK11SymKey result(PK11_DeriveWithTemplate(p11_key.get(), CKM_SP800_108_FEEDBACK_KDF, &params_item, CKM_SHA512_HMAC, CKA_SIGN, output_bitlen/8, key_template, 1, PR_FALSE));
     ASSERT_NE(result, nullptr);
 
     ASSERT_EQ(PK11_ExtractKeyValue(result.get()), SECSuccess);
