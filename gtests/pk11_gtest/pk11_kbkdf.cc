@@ -96,7 +96,7 @@ class Pkcs11KbkdfTest : public ::testing::Test {
 
     /* Choose CKM_SHA512_HMAC because it is long enough to hold all CAVP
      * key sizes. */
-    ScopedPK11SymKey result(PK11_DeriveWithTemplate(p11_key.get(), CKM_SP800_108_FEEDBACK_KDF, &params_item, CKM_SHA512_HMAC, CKA_SIGN, output_bitlen/8, key_template, 1, PR_FALSE));
+    ScopedPK11SymKey result(PK11_DeriveWithTemplate(p11_key.get(), CKM_NSS_SP800_108_FEEDBACK_KDF_DERIVE_DATA, &params_item, CKM_SHA512_HMAC, CKA_SIGN, output_bitlen/8, key_template, 1, PR_FALSE));
     ASSERT_NE(result, nullptr);
 
     ASSERT_EQ(PK11_ExtractKeyValue(result.get()), SECSuccess);
@@ -129,7 +129,7 @@ class Pkcs11KbkdfTest : public ::testing::Test {
       NULL     /* no additional derived keys */
     };
 
-    RunKDF(CKM_SP800_108_COUNTER_KDF, prf_mech, &kdf_params, output_bitlen, key, key_len, expected);
+    RunKDF(CKM_NSS_SP800_108_COUNTER_KDF_DERIVE_DATA, prf_mech, &kdf_params, output_bitlen, key, key_len, expected);
   }
 
   void RunCounterMiddleFixedTest(CK_MECHANISM_TYPE prf_mech, uint32_t counter_bitlen, uint32_t output_bitlen, uint8_t *key, uint32_t key_len, uint8_t *before_fixed_input, uint32_t before_fixed_input_len, uint8_t *after_fixed_input, uint32_t after_fixed_input_len, uint8_t *expected) {
@@ -150,7 +150,7 @@ class Pkcs11KbkdfTest : public ::testing::Test {
       NULL     /* no additional derived keys */
     };
 
-    RunKDF(CKM_SP800_108_COUNTER_KDF, prf_mech, &kdf_params, output_bitlen, key, key_len, expected);
+    RunKDF(CKM_NSS_SP800_108_COUNTER_KDF_DERIVE_DATA, prf_mech, &kdf_params, output_bitlen, key, key_len, expected);
   }
 
   void RunCounterAfterFixedTest(CK_MECHANISM_TYPE prf_mech, uint32_t counter_bitlen, uint32_t output_bitlen, uint8_t *key, uint32_t key_len, uint8_t *fixed_input, uint32_t fixed_input_len, uint8_t *expected) {
@@ -170,7 +170,7 @@ class Pkcs11KbkdfTest : public ::testing::Test {
       NULL     /* no additional derived keys */
     };
 
-    RunKDF(CKM_SP800_108_COUNTER_KDF, prf_mech, &kdf_params, output_bitlen, key, key_len, expected);
+    RunKDF(CKM_NSS_SP800_108_COUNTER_KDF_DERIVE_DATA, prf_mech, &kdf_params, output_bitlen, key, key_len, expected);
   }
 
   /* == Helpers to run Feedback mode CAVP tests == */
@@ -276,7 +276,7 @@ class Pkcs11KbkdfTest : public ::testing::Test {
       NULL
     };
 
-    RunKDF(CKM_SP800_108_DOUBLE_PIPELINE_KDF, prf_mech, &kdf_params, output_bitlen, key, key_len, expected);
+    RunKDF(CKM_NSS_SP800_108_DOUBLE_PIPELINE_KDF_DERIVE_DATA, prf_mech, &kdf_params, output_bitlen, key, key_len, expected);
   }
 
   void RunPipelineCounterBeforeIterTest(CK_MECHANISM_TYPE prf_mech, uint32_t counter_bitlen, uint32_t output_bitlen, uint8_t *key, uint32_t key_len, uint8_t *fixed_input, uint32_t fixed_input_len, uint8_t *expected) {
@@ -296,7 +296,7 @@ class Pkcs11KbkdfTest : public ::testing::Test {
       NULL
     };
 
-    RunKDF(CKM_SP800_108_DOUBLE_PIPELINE_KDF, prf_mech, &kdf_params, output_bitlen, key, key_len, expected);
+    RunKDF(CKM_NSS_SP800_108_DOUBLE_PIPELINE_KDF_DERIVE_DATA, prf_mech, &kdf_params, output_bitlen, key, key_len, expected);
   }
 
   void RunPipelineCounterAfterIterTest(CK_MECHANISM_TYPE prf_mech, uint32_t counter_bitlen, uint32_t output_bitlen, uint8_t *key, uint32_t key_len, uint8_t *fixed_input, uint32_t fixed_input_len, uint8_t *expected) {
@@ -316,7 +316,7 @@ class Pkcs11KbkdfTest : public ::testing::Test {
       NULL
     };
 
-    RunKDF(CKM_SP800_108_DOUBLE_PIPELINE_KDF, prf_mech, &kdf_params, output_bitlen, key, key_len, expected);
+    RunKDF(CKM_NSS_SP800_108_DOUBLE_PIPELINE_KDF_DERIVE_DATA, prf_mech, &kdf_params, output_bitlen, key, key_len, expected);
   }
 
   void RunPipelineCounterAfterFixedTest(CK_MECHANISM_TYPE prf_mech, uint32_t counter_bitlen, uint32_t output_bitlen, uint8_t *key, uint32_t key_len, uint8_t *fixed_input, uint32_t fixed_input_len, uint8_t *expected) {
@@ -336,7 +336,7 @@ class Pkcs11KbkdfTest : public ::testing::Test {
       NULL
     };
 
-    RunKDF(CKM_SP800_108_DOUBLE_PIPELINE_KDF, prf_mech, &kdf_params, output_bitlen, key, key_len, expected);
+    RunKDF(CKM_NSS_SP800_108_DOUBLE_PIPELINE_KDF_DERIVE_DATA, prf_mech, &kdf_params, output_bitlen, key, key_len, expected);
   }
 };
 
