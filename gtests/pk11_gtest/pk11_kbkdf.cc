@@ -63,6 +63,8 @@ class Pkcs11KbkdfTest : public ::testing::Test {
       case CKM_SHA512_HMAC:
         return 512/8;
     }
+
+    return 0;
   }
 
   void RunKDF(CK_MECHANISM_TYPE kdf_mech, CK_MECHANISM_TYPE prf_mech, CK_SP800_108_KDF_PARAMS_PTR kdf_params, uint32_t output_bitlen, uint8_t *key, uint32_t key_len, uint8_t *expected) {
@@ -102,16 +104,23 @@ class Pkcs11KbkdfTest : public ::testing::Test {
     CK_KEY_TYPE ck_generic = CKK_GENERIC_SECRET;
     CK_OBJECT_CLASS ck_class = CKO_SECRET_KEY;
 
-    CK_ATTRIBUTE_PTR derived_template[] = {
+    CK_ATTRIBUTE derived_template[] = {
       { CKA_CLASS, &ck_class, sizeof(ck_class) },
       { CKA_KEY_TYPE, &ck_generic, sizeof(ck_generic) },
       { CKA_VALUE_LEN, &derived_length, sizeof(derived_length) }
     };
 
-    CK_DERIVED_KEY derived_key = { 0 };
+    CK_OBJECT_HANDLE key_handle;
+    CK_DERIVED_KEY derived_key = {
+      derived_template,
+      sizeof(derived_template) / sizeof(*derived_template),
+      &key_handle
+    };
 
     if (output_bitlen > mac_size) {
       // Two allocations:
+      kdf_params->ulAdditionalDerivedKeys = 1;
+      kdf_params->pAdditionalDerivedKeys = &derived_key;
     }
 
     /* Build our SECItem with our passed parameters. */
