@@ -50,6 +50,21 @@ class Pkcs11KbkdfTest : public ::testing::Test {
     return result;
   }
 
+  size_t GetPRFSize(CK_MECHANISM_TYPE prf_mech, size_t key_len) {
+    switch (prf_mech) {
+      case CKM_AES_CMAC:
+        return key_len;
+      case CKM_SHA_1_HMAC:
+        return 160/8;
+      case CKM_SHA224_HMAC:
+        return 224/8;
+      case CKM_SHA384_HMAC:
+        return 384/8;
+      case CKM_SHA512_HMAC:
+        return 512/8;
+    }
+  }
+
   void RunKDF(CK_MECHANISM_TYPE kdf_mech, CK_MECHANISM_TYPE prf_mech, CK_SP800_108_KDF_PARAMS_PTR kdf_params, uint32_t output_bitlen, uint8_t *key, uint32_t key_len, uint8_t *expected) {
     SECItem key_item = {siBuffer, key, key_len};
     ScopedPK11SymKey p11_key = ImportKey(prf_mech, &key_item);
@@ -75,6 +90,52 @@ class Pkcs11KbkdfTest : public ::testing::Test {
     /* Wrap our expected output in a SECItem for easy comparisons. */
     SECItem expected_item = {siBuffer, expected, output_bitlen/8};
     ASSERT_EQ(SECITEM_CompareItem(actual_item, &expected_item), 0);
+  }
+
+  void RunKDFAdditionalKeys(CK_MECHANISM_TYPE kdf_mech, CK_MECHANISM_TYPE prf_mech, CK_SP800_108_KDF_PARAMS_PTR kdf_params, uint32_t output_bitlen, uint8_t *key, uint32_t key_len, uint8_t *expected) {
+    SECItem key_item = {siBuffer, key, key_len};
+    ScopedPK11SymKey p11_key = ImportKey(prf_mech, &key_item);
+
+    size_t mac_size = GetPRFSize(prf_mech, key_len);
+
+    CK_ULONG derived_length = 0;
+    CK_KEY_TYPE ck_generic = CKK_GENERIC_SECRET;
+    CK_OBJECT_CLASS ck_class = CKO_SECRET_KEY;
+
+    CK_ATTRIBUTE_PTR derived_template[] = {
+      { CKA_CLASS, &ck_class, sizeof(ck_class) },
+      { CKA_KEY_TYPE, &ck_generic, sizeof(ck_generic) },
+      { CKA_VALUE_LEN, &derived_length, sizeof(derived_length) }
+    };
+
+    CK_DERIVED_KEY derived_key = { 0 };
+
+    if (output_bitlen > mac_size) {
+      // Two allocations:
+    }
+
+    /* Build our SECItem with our passed parameters. */
+    ASSERT_NE(kdf_params, nullptr);
+    SECItem params_item = { siBuffer, (unsigned char *)kdf_params, sizeof(*kdf_params) };
+
+    /* Validate that our output is an even number of bytes. */
+    ASSERT_EQ((output_bitlen % 8), 0u);
+
+    /* Choose CKM_SHA512_HMAC because it is long enough to hold all CAVP
+     * key sizes. */
+    ScopedPK11SymKey result(PK11_Derive(p11_key.get(), kdf_mech, &params_item, CKM_SHA512_HMAC, CKA_SIGN, output_bitlen/8));
+    ASSERT_NE(result, nullptr);
+
+    ASSERT_EQ(PK11_ExtractKeyValue(result.get()), SECSuccess);
+
+    /* We don't need to free this -- it is just a reference... */
+    SECItem *actual_item = PK11_GetKeyData(result.get());
+    ASSERT_NE(actual_item, nullptr);
+
+    /* Wrap our expected output in a SECItem for easy comparisons. */
+    SECItem expected_item = {siBuffer, expected, output_bitlen/8};
+    ASSERT_EQ(SECITEM_CompareItem(actual_item, &expected_item), 0);
+
   }
 
   void RunFeedbackKDF(CK_MECHANISM_TYPE prf_mech, CK_SP800_108_FEEDBACK_KDF_PARAMS_PTR kdf_params, uint32_t output_bitlen, uint8_t *key, uint32_t key_len, uint8_t *expected) {
