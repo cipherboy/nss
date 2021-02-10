@@ -2787,14 +2787,21 @@ pk11_AnyUnwrapKey(PK11SlotInfo *slot, CK_OBJECT_HANDLE wrappingKey,
             return symKey;
         }
         /*
-         * if the RSA OP simply failed, don't try to unwrap again
-         * with this module.
+         * In the past, if the RSA OP simply failed, we simply didn't try
+         * to unwrap again with this module.
+         *
+         * However, this is wrong. When we pass in CKM_AES_KEY_WRAP on a
+         * nCipher (now Entrust) HSM (on firmware 12.60) -- (which doesn't
+         * actually indicate that it _supports_ the mech, but does indeed,
+         * _do_ the mech), it fails trying to import the key. It fails with
+         * a device error. So this CKR_DEVICE_ERROR isn't always the correct
+         * thing.
+         *
+         * However, we _can_ correctly do a UNWRAP into this mechanism. This
+         * is because the device prevents us from using this mech to side-load
+         * insecure keys.
          */
-        if (crv == CKR_DEVICE_ERROR) {
-            if (param_free)
-                SECITEM_FreeItem(param_free, PR_TRUE);
-            return NULL;
-        }
+
         /* fall through, maybe they incorrectly set CKF_DECRYPT */
     }
 
