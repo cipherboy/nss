@@ -23,25 +23,45 @@
 #include "secerr.h"
 
 /*
- * find an RSA public key on a card
+ * Find an RSA private key on a card with the given usage.
  */
 static CK_OBJECT_HANDLE
-pk11_FindRSAPubKey(PK11SlotInfo *slot)
+pk11_FindRSAPrivKeyWithUsage(PK11SlotInfo *slot, CK_ATTRIBUTE_TYPE usage)
 {
+    CK_BBOOL cktrue = CK_TRUE;
     CK_KEY_TYPE key_type = CKK_RSA;
-    CK_OBJECT_CLASS class_type = CKO_PUBLIC_KEY;
-    CK_ATTRIBUTE theTemplate[2];
-    size_t template_count = sizeof(theTemplate) / sizeof(theTemplate[0]);
+    CK_OBJECT_CLASS class_type = CKO_PRIVATE_KEY;
+    CK_ATTRIBUTE theTemplate[3];
+    int template_count = sizeof(theTemplate) / sizeof(theTemplate[0]);
     CK_ATTRIBUTE *attrs = theTemplate;
 
     PK11_SETATTRS(attrs, CKA_CLASS, &class_type, sizeof(class_type));
     attrs++;
     PK11_SETATTRS(attrs, CKA_KEY_TYPE, &key_type, sizeof(key_type));
     attrs++;
+    PK11_SETATTRS(attrs, usage, &cktrue, sizeof(CK_BBOOL));
+    attrs++;
     template_count = attrs - theTemplate;
     PR_ASSERT(template_count <= sizeof(theTemplate) / sizeof(CK_ATTRIBUTE));
 
     return pk11_FindObjectByTemplate(slot, theTemplate, template_count);
+}
+
+/*
+ * Find an RSA private key on a card. Preferably it needs to support UNWRAP
+ * or at worst, DECRYPT.
+ */
+static CK_OBJECT_HANDLE
+pk11_FindRSAPrivKey(PK11SlotInfo *slot)
+{
+    CK_OBJECT_HANDLE key;
+
+    key = pk11_FindRSAPrivKeyWithUsage(slot, CKA_UNWRAP);
+    if (key != CK_INVALID_HANDLE) {
+        return key;
+    }
+
+    return pk11_FindRSAPrivKeyWithUsage(slot, CKA_DECRYPT);
 }
 
 PK11SymKey *
@@ -87,10 +107,20 @@ pk11_KeyExchange(PK11SlotInfo *slot, CK_MECHANISM_TYPE type,
 
         wrapData.data = NULL;
 
-        /* find RSA Public Key on target */
-        pubKeyHandle = pk11_FindRSAPubKey(slot);
-        if (pubKeyHandle != CK_INVALID_HANDLE) {
-            privKeyHandle = PK11_MatchItem(slot, pubKeyHandle, CKO_PRIVATE_KEY);
+        /* Originally this function found a RSA public key on the target,
+         * in order to wrap the given symmetric key onto the target token.
+         *
+         * However, the issue is this is sometimes the private key we find
+         * lacks the right attributes for unwrapping and/or decrypting. So
+         * lets start the opposite way: find a private key and match the
+         * public to it. Make sure we can unwrap and decrypt with it.
+         *
+         * Note that strictly having _both_ unwrap and decrypt is unnecessary;
+         * let's assume it can find one with either or.
+         */
+        privKeyHandle = pk11_FindRSAPrivKey(slot);
+        if (privKeyHandle != CK_INVALID_HANDLE) {
+            pubKeyHandle = PK11_MatchItem(slot, privKeyHandle, CKO_PUBLIC_KEY);
         }
 
         /* if no key exists, generate a key pair */
