@@ -984,6 +984,8 @@ pk11_ParamFromIVWithLen(CK_MECHANISM_TYPE type, SECItem *iv, int keyLen)
         case CKM_JUNIPER_CBC128:
         case CKM_JUNIPER_COUNTER:
         case CKM_JUNIPER_SHUFFLE:
+        case CKM_AES_KEY_WRAP:
+        case CKM_AES_KEY_WRAP_PAD:
             if ((iv == NULL) || (iv->data == NULL))
                 break;
             param->data = (unsigned char *)PORT_Alloc(iv->len);
