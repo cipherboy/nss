@@ -57,14 +57,33 @@ pk11_KeyExchange(PK11SlotInfo *slot, CK_MECHANISM_TYPE type,
 
     /* find a common Key Exchange algorithm */
     /* RSA */
-    if (PK11_DoesMechanism(symKey->slot, CKM_RSA_PKCS) &&
-        PK11_DoesMechanism(slot, CKM_RSA_PKCS)) {
+    int does_pkcs = PK11_DoesMechanism(symKey->slot, CKM_RSA_PKCS) && \
+                    PK11_DoesMechanism(slot, CKM_RSA_PKCS);
+    int does_oeap = PK11_DoesMechanism(symKey->slot, CKM_RSA_PKCS_OAEP) && \
+                    PK11_DoesMechanism(slot, CKM_RSA_PKCS_OAEP);
+    if (does_pkcs || does_oeap) {
         CK_OBJECT_HANDLE pubKeyHandle = CK_INVALID_HANDLE;
         CK_OBJECT_HANDLE privKeyHandle = CK_INVALID_HANDLE;
         SECKEYPublicKey *pubKey = NULL;
         SECKEYPrivateKey *privKey = NULL;
         SECItem wrapData;
         unsigned int symKeyLength = PK11_GetKeyLength(symKey);
+
+        /* RSA-PKCS requires no parameters, but RSA-OAEP does. Construct with
+         * sane defaults in case we end up needing to use them. */
+        CK_MECHANISM_TYPE our_mech = CKM_RSA_PKCS_OAEP;
+        CK_RSA_PKCS_OAEP_PARAMS oaep_params = {CKM_SHA384, CKG_MGF1_SHA384,
+                                               CKZ_DATA_SPECIFIED, NULL, 0};
+        SECItem oaep_param = {siBuffer, (unsigned char*)&oaep_params,
+                              sizeof(oaep_params)};
+        SECItem *mech_param = &oaep_param;
+
+        if (!does_oeap) {
+            /* Default to RSA OAEP. If the token does not do RSA OAEP, fall
+             * back to RSA PKCS#1v1.5. */
+            our_mech = CKM_RSA_PKCS;
+            mech_param = NULL;
+        }
 
         wrapData.data = NULL;
 
@@ -116,11 +135,11 @@ pk11_KeyExchange(PK11SlotInfo *slot, CK_MECHANISM_TYPE type,
             goto rsa_failed;
 
         /* now wrap the keys in and out */
-        rv = PK11_PubWrapSymKey(CKM_RSA_PKCS, pubKey, symKey, &wrapData);
+        rv = PK11_PubWrapSymKeyWithMechanism(pubKey, our_mech, mech_param, symKey, &wrapData);
         if (rv == SECSuccess) {
-            newSymKey = PK11_PubUnwrapSymKeyWithFlagsPerm(privKey,
-                                                          &wrapData, type, operation,
-                                                          symKeyLength, flags, isPerm);
+            newSymKey = PK11_PubUnwrapSymKeyWithMechFlagsPerm(privKey, our_mech, mech_param,
+                                                              &wrapData, type, operation,
+                                                              symKeyLength, flags, isPerm);
             /* make sure we wound up where we wanted to be! */
             if (newSymKey && newSymKey->slot != slot) {
                 PK11_FreeSymKey(newSymKey);
