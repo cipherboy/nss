@@ -2959,6 +2959,18 @@ PK11_PubUnwrapSymKeyWithFlagsPerm(SECKEYPrivateKey *wrappingKey,
                                   CK_FLAGS flags, PRBool isPerm)
 {
     CK_MECHANISM_TYPE wrapType = pk11_mapWrapKeyType(wrappingKey->keyType);
+    return PK11_PubUnwrapSymKeyWithMechFlagsPerm(wrappingKey, wrapType, NULL,
+                                                 wrappedKey, target, operation,
+                                                 keySize, flags, isPerm);
+}
+
+PK11SymKey *
+PK11_PubUnwrapSymKeyWithMechFlagsPerm(SECKEYPrivateKey *wrappingKey,
+                                      CK_MECHANISM_TYPE mechType, SECItem *param,
+                                      SECItem *wrappedKey, CK_MECHANISM_TYPE target,
+                                      CK_ATTRIBUTE_TYPE operation, int keySize,
+                                      CK_FLAGS flags, PRBool isPerm)
+{
     CK_BBOOL cktrue = CK_TRUE;
     CK_ATTRIBUTE keyTemplate[MAX_TEMPL_ATTRS];
     CK_ATTRIBUTE *attrs;
@@ -2978,9 +2990,10 @@ PK11_PubUnwrapSymKeyWithFlagsPerm(SECKEYPrivateKey *wrappingKey,
         PK11_HandlePasswordCheck(slot, wrappingKey->wincx);
     }
 
-    return pk11_AnyUnwrapKey(slot, wrappingKey->pkcs11ID,
-                             wrapType, NULL, wrappedKey, target, operation, keySize,
-                             wrappingKey->wincx, keyTemplate, templateCount, isPerm);
+    return pk11_AnyUnwrapKey(slot, wrappingKey->pkcs11ID, mechType, param,
+                             wrappedKey, target, operation, keySize,
+                             wrappingKey->wincx, keyTemplate, templateCount,
+                             isPerm);
 }
 
 PK11SymKey *
