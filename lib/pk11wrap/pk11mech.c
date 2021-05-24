@@ -252,6 +252,7 @@ PK11_GetKeyType(CK_MECHANISM_TYPE type, unsigned long len)
         case CKM_NSS_AES_KEY_WRAP_PAD:
         case CKM_AES_KEY_WRAP:
         case CKM_AES_KEY_WRAP_KWP:
+        case CKM_AES_KEY_WRAP_PAD:
         case CKM_AES_XCBC_MAC:
         case CKM_AES_XCBC_MAC_96:
             return CKK_AES;
@@ -983,6 +984,8 @@ pk11_ParamFromIVWithLen(CK_MECHANISM_TYPE type, SECItem *iv, int keyLen)
         case CKM_JUNIPER_CBC128:
         case CKM_JUNIPER_COUNTER:
         case CKM_JUNIPER_SHUFFLE:
+        case CKM_AES_KEY_WRAP:
+        case CKM_AES_KEY_WRAP_PAD:
             if ((iv == NULL) || (iv->data == NULL))
                 break;
             param->data = (unsigned char *)PORT_Alloc(iv->len);

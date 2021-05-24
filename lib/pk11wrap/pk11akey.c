@@ -2051,7 +2051,7 @@ PK11_ExportEncryptedPrivKeyInfoV2(
     /* If the key isn't in the private key slot, move it */
     if (key->slot != pk->pkcs11Slot) {
         PK11SymKey *newkey = pk11_CopyToSlot(pk->pkcs11Slot,
-                                             key->type, CKA_WRAP, key);
+                                             cryptoMech.mechanism, CKA_WRAP, key);
         if (newkey == NULL) {
             /* couldn't import the wrapping key, try exporting the
              * private key */

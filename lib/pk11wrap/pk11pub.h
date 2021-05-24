@@ -453,6 +453,9 @@ PK11SymKey *PK11_UnwrapSymKeyWithFlagsPerm(PK11SymKey *wrappingKey,
  *  PK11_PubUnwrapWithFlagsPerm is the same as PK11_PubUnwrap except you can
  * use * CKF_ flags to enable more than one operation, and optionally make
  * the key permanent (token key).
+ * PK11_PubUnwrapWithMechFlagsPerm is the same as PK11_PubUnwrapWithFlagsPerm
+ * except that you can also specify the unwrapping mechanism type and
+ * parameters, enabling RSA-OAEP usage.
  */
 PK11SymKey *PK11_PubUnwrapSymKey(SECKEYPrivateKey *key, SECItem *wrapppedKey,
                                  CK_MECHANISM_TYPE target, CK_ATTRIBUTE_TYPE operation, int keySize);
@@ -467,6 +470,14 @@ PK11SymKey *PK11_PubUnwrapSymKeyWithFlagsPerm(SECKEYPrivateKey *wrappingKey,
                                               SECItem *wrappedKey, CK_MECHANISM_TYPE target,
                                               CK_ATTRIBUTE_TYPE operation, int keySize,
                                               CK_FLAGS flags, PRBool isPerm);
+PK11SymKey *PK11_PubUnwrapSymKeyWithMechFlagsPerm(SECKEYPrivateKey *wrappingKey,
+                                                  CK_MECHANISM_TYPE mechType,
+                                                  SECItem *param,
+                                                  SECItem *wrappedKey,
+                                                  CK_MECHANISM_TYPE target,
+                                                  CK_ATTRIBUTE_TYPE operation,
+                                                  int keySize, CK_FLAGS flags,
+                                                  PRBool isPerm);
 PK11SymKey *PK11_FindFixedKey(PK11SlotInfo *slot, CK_MECHANISM_TYPE type,
                               SECItem *keyID, void *wincx);
 SECStatus PK11_DeleteTokenPrivateKey(SECKEYPrivateKey *privKey, PRBool force);

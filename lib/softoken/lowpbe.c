@@ -960,18 +960,21 @@ nsspkcs5_FillInParam(SECOidTag algorithm, HASH_HashType hashType,
             pbe_param->keyLen = 256 / 8;
             break;
         case SEC_OID_AES_128_KEY_WRAP:
+        case SEC_OID_AES_128_KEY_WRAP_PAD:
             pbe_param->ivLen = 0;
             pbe_param->pbeType = NSSPKCS5_PBKDF2;
             pbe_param->encAlg = algorithm;
             pbe_param->keyLen = 128 / 8;
             break;
         case SEC_OID_AES_192_KEY_WRAP:
+        case SEC_OID_AES_192_KEY_WRAP_PAD:
             pbe_param->ivLen = 0;
             pbe_param->pbeType = NSSPKCS5_PBKDF2;
             pbe_param->encAlg = algorithm;
             pbe_param->keyLen = 192 / 8;
             break;
         case SEC_OID_AES_256_KEY_WRAP:
+        case SEC_OID_AES_256_KEY_WRAP_PAD:
             pbe_param->ivLen = 0;
             pbe_param->pbeType = NSSPKCS5_PBKDF2;
             pbe_param->encAlg = algorithm;

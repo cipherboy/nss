@@ -319,13 +319,22 @@ static int
 sec_pkcs5v2_aes_key_length(SECOidTag algorithm)
 {
     switch (algorithm) {
-        /* The key length for the AES-CBC-Pad algorithms are
-         * determined from the undelying cipher algorithm.  */
+        /* The key length for the AES algorithms are determined from the
+         * underlying cipher algorithm. */
         case SEC_OID_AES_128_CBC:
+        case SEC_OID_AES_128_GCM:
+        case SEC_OID_AES_128_KEY_WRAP:
+        case SEC_OID_AES_128_KEY_WRAP_PAD:
             return AES_128_KEY_LENGTH;
         case SEC_OID_AES_192_CBC:
+        case SEC_OID_AES_192_GCM:
+        case SEC_OID_AES_192_KEY_WRAP:
+        case SEC_OID_AES_192_KEY_WRAP_PAD:
             return AES_192_KEY_LENGTH;
         case SEC_OID_AES_256_CBC:
+        case SEC_OID_AES_256_GCM:
+        case SEC_OID_AES_256_KEY_WRAP:
+        case SEC_OID_AES_256_KEY_WRAP_PAD:
             return AES_256_KEY_LENGTH;
         default:
             break;
@@ -663,7 +672,7 @@ sec_pkcs5CreateAlgorithmID(SECOidTag algorithm,
          * Thus in PKCS5 v1 and PKCS12, this algorithm maps to a pkcs #11
          * mechanism, where as in PKCS 5v2, this algorithm tag does not map
          * directly to a PKCS #11 mechanim, instead the 2 oids in the
-         * algorithm ID block map the the actual PKCS #11 mechanism.
+         * algorithm ID block map to the actual PKCS #11 mechanism.
          * algorithm is). We use choose this algorithm oid based on the
          * cipherAlgorithm to determine what this should be (MAC1 or PBES2).
          */
